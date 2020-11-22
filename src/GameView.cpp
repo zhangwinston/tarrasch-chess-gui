@@ -1814,13 +1814,10 @@ bool GameView::CommentEdit(wxRichTextCtrl *UNUSED(ctrl), wxString &txt_to_insert
 	//if (0x20 <= keycode && keycode <= 0xff && keycode != 0x7f /*delete*/)
 	//{
 	//	char c = (char)keycode;
-	//	txt_to_insert = c;
-	//	ascii = true;
-	//}
-	wxChar c = (wxChar)keycode;
-	if (wxIsprint(c) && keycode != 0x7f /*delete*/)
+
+    wxChar c = (wxChar)keycode;
+    if (wxIsprint(c) && keycode != 0x7f /*delete*/)
     {
-        //char c = (char)keycode;
         txt_to_insert = c;
         ascii = true;
     }

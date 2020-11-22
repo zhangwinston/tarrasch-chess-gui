@@ -1123,7 +1123,7 @@ BEGIN_EVENT_TABLE(ChessFrame, wxFrame)
         EVT_UPDATE_UI (wxID_NEW,                ChessFrame::OnUpdateFileNew)
     EVT_MENU (wxID_OPEN,                    ChessFrame::OnFileOpen)
         EVT_UPDATE_UI (wxID_OPEN,               ChessFrame::OnUpdateFileOpen)
-	EVT_MENU_RANGE(wxID_FILE1,wxID_FILE9, ChessFrame::OnFileOpenMru)
+	EVT_MENU_RANGE(wxID_FILE1,wxID_FILE1+19, ChessFrame::OnFileOpenMru)
     EVT_MENU (ID_FILE_OPEN_LOG,             ChessFrame::OnFileOpenLog)
         EVT_UPDATE_UI (ID_FILE_OPEN_LOG,        ChessFrame::OnUpdateFileOpenLog)
     EVT_MENU (wxID_SAVE,                    ChessFrame::OnFileSave)
@@ -1644,8 +1644,10 @@ void ChessFrame::OnCredits(wxCommandEvent& WXUNUSED(event))
         "\n\n"
 		"Thanks to Yusuke Kamiyamane (Fugue icons) for some of the toolbar icons."
         "\n\n"
-        "Thanks to Ed Schr" "\xC3\xB6" "der" " for Millionbase and Pierre Havard for KingBase. Also to Mark Crowther for TWIC which "
-        "is the basis of all modern chess database curation."
+        "Special thanks to Mark Crowther for permission to use TWIC to build tarrasch-base the default database, TWIC "
+        "underlies all modern chess database curation, the chess community owes Mark a massive debt."
+        "\n\n"
+        "Thanks to Ed Schr" "\xC3\xB6" "der" " for Millionbase."
         "\n\n"
         "Thanks to the engine authors who provided explicit permission to "
         "include their engines. In chronological order, Vasik Rajlich (Rybka), "

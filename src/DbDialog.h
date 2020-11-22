@@ -77,6 +77,7 @@ public:
     virtual void GdvOnActivate();
     virtual void GdvEnumerateGames();
     virtual wxSizer *GdvAddExtraControls( bool big_display );
+    virtual void GdvEnableControlsIfGamesFound( bool have_games );
     virtual void GdvReadItem( int item, CompactGame &info );
     virtual void GdvListColClick( int compare_col );
     virtual void GdvSaveAllToAFile();
@@ -98,6 +99,9 @@ public:
     void CopyOrAdd( bool clear_clipboard );
     void StatsCalculate();
     void PatternSearch();
+
+    // Sets the help text for the dialog controls
+    void SetDialogHelp();
 
     // Data members
 private:
