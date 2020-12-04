@@ -9,6 +9,7 @@
 #define MOVE_TREE_H
 #include <string>
 #include <vector>
+#include "wx/artprov.h"
 #include "thc.h"
 
 struct GAME_MOVE
