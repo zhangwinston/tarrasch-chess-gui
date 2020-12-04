@@ -58,9 +58,9 @@ The following are not needed for A) only for B) and C)
 6) void BinDbNormaliseOrder( uint32_t begin, uint32_t end )
     After all games from one pgn file appended to games array, normalise their order (older first, newer last)
     This function either leaves the games alone or reverses them
-7) bool BinDbRemoveDuplicatesAndWrite( std::string &title, int step, FILE *ofile, wxWindow *window )
+7) bool BinDbRemoveDuplicatesAndWrite( std::string &title, int step, FILE *ofile, bool locked, wxWindow *window )
     New in V3.01a - incorporate write file so can do that before writing dups to TarraschDbDuplicate.pgn
-8) bool BinDbWriteOutToFile( FILE *ofile, int nbr_to_omit_from_end, ProgressBar *pb )
+8) bool BinDbWriteOutToFile( FILE *ofile, int nbr_to_omit_from_end, bool locked, ProgressBar *pb )
     Now only called by BinDbRemoveDuplicatesAndWrite()
 9) void BinDbCreationEnd()
     clears internal games vector
@@ -319,7 +319,7 @@ void Pgn2Tdb( FILE *fin, FILE *fout )
     #else
     PgnRead pr('B',0);
     pr.Process(fin);
-    BinDbWriteOutToFile(fout,0);
+    BinDbWriteOutToFile(fout,0,false);
     #endif
 }
 
@@ -979,6 +979,21 @@ static bool IsPlayerMatch( const char *player, std::vector<std::string> &tokens 
     return false;
 }
 
+//  match only if years are present and match
+static bool IsYearMatch( const char *date1, const char *date2 )
+{
+    if( !date1 || !date2 )
+        return false;
+    for( int i=0; i<4; i++ )
+    {
+        if( *date1=='\0' || *date2=='\0' )
+            return false;
+        if( *date1++ != *date2++ )
+            return false;
+    }
+    return true;
+}
+
 uint32_t BinDbGetGamesSize()
 {
     return games.size();
@@ -1045,7 +1060,8 @@ static bool DupDetect( smart_ptr<ListableGame> p1, std::vector<std::string> &whi
     if( !black_match )
         black_match = IsPlayerMatch(p2->Black(),black_tokens1);
     bool result_match = (p1->ResultBin() == p2->ResultBin() );
-    bool dup = (white_match && black_match && /*date_match &&*/ result_match);
+    bool year_match = IsYearMatch( p1->Date(),  p2->Date() );   // best by test - require a yyyy match, but not an exact yyyy-mm-dd match
+    bool dup = (white_match && black_match && year_match && result_match);
     return dup;
 }
 
@@ -1202,9 +1218,29 @@ void BinDbDatabaseInitialSort( std::vector< smart_ptr<ListableGame> > &games_, b
 {
 
     // Usually the database is sorted according to game_id - bail out quickly if no need to sort
-    if( !sort_by_player_name )
+    bool sorted=true;
+    if( sort_by_player_name )
     {
-        bool sorted=true;
+        uint32_t prev_id=0;
+        int prev_white_bin=0;
+        for( uint32_t i=0; sorted && i<games_.size(); i++ )
+        {
+            uint32_t id = games_[i]->game_id;
+            int white_bin = games_[i]->WhiteBin();
+        	bool eq = (white_bin == prev_white_bin);
+            bool lt;
+    	    if( eq )
+	    	    lt = id < prev_id;   // This means the "Show all by player" feature shows each players game in db order
+	        else
+		        lt = white_bin < prev_white_bin;
+            if( lt )
+                sorted = false;
+            prev_id = id;
+            prev_white_bin = white_bin;
+        }
+    }
+    else
+    {
         uint32_t prev=0;
         for( uint32_t i=0; sorted && i<games_.size(); i++ )
         {
@@ -1213,13 +1249,10 @@ void BinDbDatabaseInitialSort( std::vector< smart_ptr<ListableGame> > &games_, b
                 sorted = false;
             prev = id;
         }
-        if( sorted )
-        {
-            cprintf( "Already sorted\n" );
-            return;
-        }
     }
-    cprintf( "Not already sorted\n" );
+    cprintf( "%s sorted by %s\n", sorted?"Already":"Not already", sort_by_player_name?"player name":"id" );
+    if( sorted )
+        return;
     std::string desc(sort_by_player_name?"Sorting by player name":"Initial sort");
     ProgressBar progress_bar( "Sorting", desc, true );
     //progress_bar.DrawNow();
@@ -1244,265 +1277,265 @@ static void replace_once( std::string &s, const std::string from, const std::str
 
 
 // New in V3.01a - incorporate write file so can do that before writing dups to TarraschDbDuplicate.pgn
-bool BinDbRemoveDuplicatesAndWrite(std::string &title, int step, FILE *ofile, wxWindow *window)
+bool BinDbRemoveDuplicatesAndWrite( std::string &title, int step, FILE *ofile, bool locked, wxWindow *window )
 {
 #ifdef  EXTRA_DEDUP_DIAGNOSTIC_FILE
-	wxFileName wfn2(objs.repository->log.m_file.c_str());
-	if (!wfn2.IsOk())
-		wfn2.SetFullName("TarraschDbDuplicatesFileSpecial.pgn");
-	wfn2.SetExt("pgn");
-	wfn2.SetName("TarraschDbDuplicatesFileSpecial");
-	wxString dups_filename2 = wfn2.GetFullPath();
-	FILE *pgn_dup2 = fopen(dups_filename2.c_str(), "wb");
+    wxFileName wfn2(objs.repository->log.m_file.c_str());
+    if( !wfn2.IsOk() )
+        wfn2.SetFullName("TarraschDbDuplicatesFileSpecial.pgn");
+    wfn2.SetExt("pgn");
+    wfn2.SetName("TarraschDbDuplicatesFileSpecial");
+    wxString dups_filename2 = wfn2.GetFullPath();
+    FILE *pgn_dup2 = fopen(dups_filename2.c_str(),"wb");
 #endif
-	bool ok = true;
+    bool ok=true;
 
-	// Bug fix: V3.01 Establish contiguous id range - if we have assembled multiple files it won't have happened
-	size_t nbr = games.size();
-	uint32_t id = GameIdAllocateTop(nbr);
-	for (size_t i = 0; i < nbr; i++)
-		games[i]->game_id = id++;
+    // Bug fix: V3.01 Establish contiguous id range - if we have assembled multiple files it won't have happened
+    size_t nbr = games.size();
+    uint32_t id = GameIdAllocateTop(nbr);
+    for( size_t i=0; i<nbr; i++ )
+        games[i]->game_id = id++;
 
-	// Last three steps - remove duplicates, write to file, write duplicates to TarraschDbDuplicates.pgn
-	char buf[200];
-	sprintf(buf, "%s, step %d of %d", title.c_str(), step, step + 2);
-	std::string dup_title(buf);
-	sprintf(buf, "%s, step %d of %d", title.c_str(), step + 1, step + 2);
-	std::string write_title(buf);
-	sprintf(buf, "%s, step %d of %d", title.c_str(), step + 2, step + 2);
-	std::string optional_title(buf);
-	{
-		BinDbShowDebugOrder(games, "Duplicate Removal - phase 1 before");
-		std::string desc("Duplicate Removal - phase 1");
-		ProgressBar progress_bar(dup_title, desc, true, window);
-		progress_bar.DrawNow();
-		sort_before(games.begin(), games.end(), predicate_sorts_by_game_moves, &progress_bar);
-		std::sort(games.begin(), games.end(), predicate_sorts_by_game_moves);
-		sort_after();
-		BinDbShowDebugOrder(games, "Duplicate Removal - phase 1 after");
-	}
-	{
-		BinDbShowDebugOrder(games, "Duplicate Removal - phase 2 before");
-		std::string desc("Duplicate Removal - phase 2");
-		ProgressBar progress_bar(dup_title, desc, true, window);
-		progress_bar.DrawNow();
-		ProgressBar *pb = &progress_bar;
-		int nbr_games = games.size();
+    // Last three steps - remove duplicates, write to file, write duplicates to TarraschDbDuplicates.pgn
+    char buf[200];
+    sprintf( buf, "%s, step %d of %d", title.c_str(), step, step+2 );
+    std::string dup_title(buf);
+    sprintf( buf, "%s, step %d of %d", title.c_str(), step+1, step+2 );
+    std::string write_title(buf);
+    sprintf( buf, "%s, step %d of %d", title.c_str(), step+2, step+2 );
+    std::string optional_title(buf);
+    {
+        BinDbShowDebugOrder( games, "Duplicate Removal - phase 1 before");
+        std::string desc("Duplicate Removal - phase 1");
+        ProgressBar progress_bar( dup_title, desc, true, window );
+        progress_bar.DrawNow();
+        sort_before( games.begin(), games.end(), predicate_sorts_by_game_moves, &progress_bar );
+        std::sort( games.begin(), games.end(), predicate_sorts_by_game_moves );
+        sort_after();
+        BinDbShowDebugOrder( games, "Duplicate Removal - phase 1 after");
+    }
+    {
+        BinDbShowDebugOrder( games, "Duplicate Removal - phase 2 before");
+        std::string desc("Duplicate Removal - phase 2");
+        ProgressBar progress_bar( dup_title, desc, true, window );
+        progress_bar.DrawNow();
+        ProgressBar *pb = &progress_bar;
+        int nbr_games = games.size();
 
-		// State variable - true when traversing duplicates
-		bool in_dups = false;
+        // State variable - true when traversing duplicates
+        bool in_dups=false;
 
-		// State variable - points to first of group of duplicates
-		int start = 0;
-		for (int i = 0; i < nbr_games - 1; i++)    // note we stop at second last element
-		{
-			if (pb->Perfraction(i, nbr_games))
-				return false;   // abort
+        // State variable - points to first of group of duplicates
+        int start=0;
+        for( int i=0; i<nbr_games-1; i++ )    // note we stop at second last element
+        {
+            if( pb->Perfraction( i,nbr_games) )
+                return false;   // abort
 
-			// Does this element match the next element? (there's always another element because
-			//  remember we stop at second to last element not last element)
-			bool next_matches = (0 == strcmp(games[i]->CompressedMoves(), games[i + 1]->CompressedMoves()));
+            // Does this element match the next element? (there's always another element because
+            //  remember we stop at second to last element not last element)
+            bool next_matches = (0 == strcmp(games[i]->CompressedMoves(),games[i+1]->CompressedMoves()) );
 
-			// end will point beyond end of a group of duplicates if we identify such a group this time
-			//  through the loop
-			int end = i;
+            // end will point beyond end of a group of duplicates if we identify such a group this time
+            //  through the loop
+            int end = i;
 
-			// State machine to maintain in_dups and start state variables
-			if (in_dups)
-			{
-				if (!next_matches)
-				{
-					in_dups = false;
-					end = i + 1;  // Leaving a group of duplicates, evaluate them
-				}
-			}
-			else
-			{
-				if (next_matches)
-				{
-					in_dups = true;
-					start = i;
-				}
-			}
+            // State machine to maintain in_dups and start state variables
+            if( in_dups )
+            {
+                if( !next_matches )
+                {
+                    in_dups = false;
+                    end = i+1;  // Leaving a group of duplicates, evaluate them
+                }
+            }
+            else
+            {
+                if( next_matches )
+                {
+                    in_dups = true;
+                    start = i;
+                }
+            }
 
-			// One special case - a group of duplicates at the end
-			bool last = (i + 1 >= nbr_games - 1);  // is this the last time thru loop?
-			if (last && in_dups)
-				end = i + 2;  // i points at second last element, end should point beyond last element
+            // One special case - a group of duplicates at the end
+            bool last = (i+1 >= nbr_games-1);  // is this the last time thru loop?
+            if( last && in_dups )
+                end = i+2;  // i points at second last element, end should point beyond last element
 
-			// Found a group of (potential) duplicates. So far we only know that the moves are
-			//  identical. We have more work to do to identify the real duplicates. Real duplicates
-			//  are marked with id = GAME_ID_SENTINEL so that they group together when we do a final
-			//  sort by id.
-			if (end > i)
-			{
+            // Found a group of (potential) duplicates. So far we only know that the moves are
+            //  identical. We have more work to do to identify the real duplicates. Real duplicates
+            //  are marked with id = GAME_ID_SENTINEL so that they group together when we do a final
+            //  sort by id.
+            if( end > i )
+            {
 
-				// First reorder the group by id
-				std::sort(games.begin() + start, games.begin() + end, predicate_sorts_by_id);
+                // First reorder the group by id
+                std::sort( games.begin()+start, games.begin()+end, predicate_sorts_by_id );
 #if 0
-				{
-					cprintf("Eval Dups in\n");
-					for (int idx = start; idx < end; idx++)
-					{
-						smart_ptr<ListableGame> p = games[idx];
-						cprintf("%d: %s-%s, %s %d ply\n", p->game_id, p->White(), p->Black(), p->Event(), strlen(p->CompressedMoves()));
-					}
-				}
+                {
+                    cprintf( "Eval Dups in\n" );
+                    for( int idx=start; idx<end; idx++ )
+                    {
+                        smart_ptr<ListableGame> p = games[idx];
+                        cprintf( "%d: %s-%s, %s %d ply\n", p->game_id, p->White(), p->Black(), p->Event(), strlen(p->CompressedMoves()) );
+                    }
+                }
 #endif
 
-				// For each game in group of duplicates
-				for (int idx = start; idx < end; idx++)
-				{
-					smart_ptr<ListableGame> p = games[idx];
+                // For each game in group of duplicates
+                for( int idx=start; idx<end; idx++ )
+                {
+                    smart_ptr<ListableGame> p = games[idx];
 
-					// If the game hasn't already been marked as a dup (note first of the group is never marked as a dup)
-					if (p->game_id != GAME_ID_SENTINEL)
-					{
+                    // If the game hasn't already been marked as a dup (note first of the group is never marked as a dup)
+                    if( p->game_id != GAME_ID_SENTINEL )
+                    {
 
-						// Sweep through the rest of the group and mark each game in turn a dup if it matches
-						std::vector<std::string> white_tokens;
-						Split(p->White(), white_tokens);
-						std::vector<std::string> black_tokens;
-						Split(p->Black(), black_tokens);
+                        // Sweep through the rest of the group and mark each game in turn a dup if it matches
+                        std::vector<std::string> white_tokens;
+                        Split(p->White(),white_tokens);
+                        std::vector<std::string> black_tokens;
+                        Split(p->Black(),black_tokens);
 
-						// Note that this is a O(2) type algorithm sadly, we loop through a group of games for each
-						//  game in main loop
+                        // Note that this is a O(2) type algorithm sadly, we loop through a group of games for each
+                        //  game in main loop
 #ifdef EXTRA_DEDUP_DIAGNOSTIC_FILE
-						int nbr_dups = 0;
+                        int nbr_dups=0;
 #endif
-						std::string str_dup_games;
-						for (int j = idx + 1; j < end; j++)
-						{
-							smart_ptr<ListableGame> q = games[j];
-							if (q->game_id != GAME_ID_SENTINEL && DupDetect(p, white_tokens, black_tokens, q))
-							{
-								q->game_id = GAME_ID_SENTINEL;
+                        std::string str_dup_games;
+                        for( int j=idx+1; j<end; j++ )
+                        {
+                            smart_ptr<ListableGame> q = games[j];
+                            if( q->game_id!=GAME_ID_SENTINEL && DupDetect(p,white_tokens,black_tokens,q) )
+                            {
+                                q->game_id = GAME_ID_SENTINEL;    
 #ifdef EXTRA_DEDUP_DIAGNOSTIC_FILE
-								GameDocument the_game;
-								CompactGame pact;
-								std::string str;
-								if (nbr_dups == 0)
-								{
-									p->GetCompactGame(pact);
-									pact.Upscale(the_game);
-									the_game.ToFileTxtGameDetails(str);
-									str_dup_games += str;
-									the_game.ToFileTxtGameBody(str);
-									str_dup_games += str;
-								}
-								nbr_dups++;
-								q->GetCompactGame(pact);
-								pact.Upscale(the_game);
-								the_game.ToFileTxtGameDetails(str);
-								str_dup_games += str;
-								the_game.ToFileTxtGameBody(str);
-								str_dup_games += str;
+                                GameDocument the_game;
+                                CompactGame pact;
+                                std::string str;
+                                if( nbr_dups == 0 )
+                                {
+                                    p->GetCompactGame( pact );
+                                    pact.Upscale(the_game);
+                                    the_game.ToFileTxtGameDetails( str );
+                                    str_dup_games += str;
+                                    the_game.ToFileTxtGameBody( str );
+                                    str_dup_games += str;
+                                }
+                                nbr_dups++;
+                                q->GetCompactGame( pact );
+                                pact.Upscale(the_game);
+                                the_game.ToFileTxtGameDetails( str );
+                                    str_dup_games += str;
+                                the_game.ToFileTxtGameBody( str );
+                                str_dup_games += str;
 #endif
-							}
+                            }
+                        }
 #ifdef EXTRA_DEDUP_DIAGNOSTIC_FILE
-							if (pgn_dup2 && nbr_dups > 0)
-							{
-								if (nbr_dups > 1)
-									replace_once(str_dup_games, "[White \"", "[White \"MORE-THAN-2- ");
-								fwrite(str_dup_games.c_str(), 1, str_dup_games.length(), pgn_dup2);
-							}
+                        if( pgn_dup2 && nbr_dups>0 )
+                        {
+                            if( nbr_dups > 1 )
+                                replace_once( str_dup_games, "[White \"", "[White \"MORE-THAN-2- " ); 
+                            fwrite(str_dup_games.c_str(),1,str_dup_games.length(),pgn_dup2);
+                        }
 #endif
-						}
-					}
+                    }
+                }
 #if 0           
-					{
-						cprintf("Eval Dups out\n");
-						for (int idx = start; idx < end; idx++)
-						{
-							smart_ptr<ListableGame> p = games[idx];
-							cprintf("%d: %s-%s, %s %d ply\n", p->game_id, p->White(), p->Black(), p->Event(), strlen(p->CompressedMoves()));
-						}
-					}
+                {
+                    cprintf( "Eval Dups out\n" );
+                    for( int idx=start; idx<end; idx++ )
+                    {
+                        smart_ptr<ListableGame> p = games[idx];
+                        cprintf( "%d: %s-%s, %s %d ply\n", p->game_id, p->White(), p->Black(), p->Event(), strlen(p->CompressedMoves()) );
+                    }
+                }
 #endif
-				}
-			}
-			BinDbShowDebugOrder(games, "Duplicate Removal - phase 2 after");
-		}
-		int nbr_deleted = 0;
-		{
-			BinDbShowDebugOrder(games, "Duplicate Removal - phase 3 before");
-			std::string desc("Duplicate Removal - phase 3");
-			ProgressBar progress_bar(dup_title, desc, true, window);
-			//progress_bar.DrawNow();
-			sort_before(games.begin(), games.end(), predicate_sorts_by_id, &progress_bar);
-			std::sort(games.begin(), games.end(), predicate_sorts_by_id);
-			sort_after();
+            }
+        }
+        BinDbShowDebugOrder( games, "Duplicate Removal - phase 2 after");
+    }
+    int nbr_deleted=0;
+    {
+        BinDbShowDebugOrder( games, "Duplicate Removal - phase 3 before");
+        std::string desc("Duplicate Removal - phase 3");
+        ProgressBar progress_bar( dup_title, desc, true, window );
+        //progress_bar.DrawNow();
+        sort_before( games.begin(), games.end(), predicate_sorts_by_id, &progress_bar );
+        std::sort( games.begin(), games.end(), predicate_sorts_by_id );
+        sort_after();
 
-			// Games to be deleted are at the end - with id GAME_ID_SENTINEL, count them
-			for (int i = games.size() - 1; i >= 0; i--)
-			{
-				if (games[i]->game_id != GAME_ID_SENTINEL)
-					break;
-				else
-					nbr_deleted++;
-			}
-			BinDbShowDebugOrder(games, "Duplicate Removal - phase 3 after");
-		}
-
-		// New in V3.01a - incorporate write file so can do that before writing dups to TarraschDbDuplicate.pgn
-		if (ofile)
-		{
-			std::string desc("Writing file");
-			ProgressBar progress_bar(write_title, desc, true, window);
-			ok = BinDbWriteOutToFile(ofile, nbr_deleted, &progress_bar);
-		}
-
-		if (nbr_deleted)
-		{
-			wxFileName wfn(objs.repository->log.m_file.c_str());
-			if (!wfn.IsOk())
-				wfn.SetFullName("TarraschDbDuplicatesFile.pgn");
-			wfn.SetExt("pgn");
-			wfn.SetName("TarraschDbDuplicatesFile");
-			wxString dups_filename = wfn.GetFullPath();
-			FILE *pgn_dup = fopen(dups_filename.c_str(), "wb");
-			if (pgn_dup)
-			{
-				BinDbShowDebugOrder(games, "Duplicate Removal - phase 4 before");
-				std::string desc("Saving duplicates to TarraschDbDuplicatesFile.pgn, cancel if not needed");
-				ProgressBar progress_bar(optional_title, desc, true, window);
-				for (int i = games.size() - 1; i >= 0; i--)
-				{
-					if (games[i]->game_id != GAME_ID_SENTINEL)
-						break;
-					else
-					{
-						GameDocument  the_game;
-						CompactGame pact;
-						games[i]->GetCompactGame(pact);
-						pact.Upscale(the_game);
-						std::string str;
-						the_game.ToFileTxtGameDetails(str);
-						if (pgn_dup)
-							fwrite(str.c_str(), 1, str.length(), pgn_dup);
-						the_game.ToFileTxtGameBody(str);
-						if (pgn_dup)
-							fwrite(str.c_str(), 1, str.length(), pgn_dup);
-						if (progress_bar.Perfraction(games.size() - i, nbr_deleted))
-							break;
-					}
-				}
-				fclose(pgn_dup);
-			}
-			games.erase(games.end() - nbr_deleted, games.end());
-			cprintf("Number of duplicates deleted: %d\n", nbr_deleted);
-			BinDbShowDebugOrder(games, "Duplicate Removal - phase 4 after");
-		}
-#ifdef EXTRA_DEDUP_DIAGNOSTIC_FILE
-		if (pgn_dup2)
-			fclose(pgn_dup2);
-#endif    
-		return true;
+        // Games to be deleted are at the end - with id GAME_ID_SENTINEL, count them
+        for( int i=games.size()-1; i>=0; i-- )
+        {
+            if( games[i]->game_id != GAME_ID_SENTINEL )
+                break;
+            else
+                nbr_deleted++;
+        }
+		BinDbShowDebugOrder(games, "Duplicate Removal - phase 3 after");
 	}
+
+    // New in V3.01a - incorporate write file so can do that before writing dups to TarraschDbDuplicate.pgn
+    if( ofile )
+    {
+        std::string desc("Writing file");
+        ProgressBar progress_bar( write_title, desc, true, window );
+        ok = BinDbWriteOutToFile(ofile,nbr_deleted,locked,&progress_bar);
+    }
+
+    if( nbr_deleted )
+    {
+        wxFileName wfn(objs.repository->log.m_file.c_str());
+        if( !wfn.IsOk() )
+            wfn.SetFullName("TarraschDbDuplicatesFile.pgn");
+        wfn.SetExt("pgn");
+        wfn.SetName("TarraschDbDuplicatesFile");
+        wxString dups_filename = wfn.GetFullPath();
+        FILE *pgn_dup = fopen(dups_filename.c_str(),"wb");
+        if( pgn_dup )
+	    {
+		    BinDbShowDebugOrder(games, "Duplicate Removal - phase 4 before");
+		    std::string desc("Saving duplicates to TarraschDbDuplicatesFile.pgn, cancel if not needed");
+		    ProgressBar progress_bar(optional_title, desc, true, window);
+            for( int i=games.size()-1; i>=0; i-- )
+            {
+                if( games[i]->game_id != GAME_ID_SENTINEL )
+                    break;
+                else
+                {
+                    GameDocument  the_game;
+                    CompactGame pact;
+                    games[i]->GetCompactGame( pact );
+                    pact.Upscale(the_game);
+                    std::string str;
+                    the_game.ToFileTxtGameDetails( str );
+                    if( pgn_dup )
+                        fwrite(str.c_str(),1,str.length(),pgn_dup);
+                    the_game.ToFileTxtGameBody( str );
+                    if( pgn_dup )
+                        fwrite(str.c_str(),1,str.length(),pgn_dup);
+                    if( progress_bar.Perfraction( games.size()-i, nbr_deleted ) )
+                        break;
+                }
+            }
+            fclose(pgn_dup);
+        }
+        games.erase( games.end()-nbr_deleted, games.end() );
+        cprintf( "Number of duplicates deleted: %d\n", nbr_deleted );
+        BinDbShowDebugOrder( games, "Duplicate Removal - phase 4 after");
+    }
+#ifdef EXTRA_DEDUP_DIAGNOSTIC_FILE
+    if( pgn_dup2 )
+        fclose(pgn_dup2);
+#endif    
+    return true;
 }
 
 // Return bool okay
-bool BinDbWriteOutToFile( FILE *ofile, int nbr_to_omit_from_end, ProgressBar *pb )
+bool BinDbWriteOutToFile( FILE *ofile, int nbr_to_omit_from_end, bool locked, ProgressBar *pb )
 {
     std::set<std::string> set_player;
     std::set<std::string> set_site;
@@ -1520,7 +1553,19 @@ bool BinDbWriteOutToFile( FILE *ofile, int nbr_to_omit_from_end, ProgressBar *pb
     std::map<std::string,int> map_player;
     std::map<std::string,int> map_event;
     std::map<std::string,int> map_site;
-    fwrite( &compatibility_header, sizeof(compatibility_header), 1, ofile );
+    if( locked )
+        fwrite( &compatibility_header, sizeof(compatibility_header), 1, ofile );
+    else
+    {
+        // If not locked, we may as well make it usable by older versions. Subtle point:
+        //  older versions will quite happily accept the new FileHeader below, with the
+        //  locked flag they don't know about and don't need. Reason: Older versions know
+        //  to use the hdr_len field of the FileHeader rather than their own sizeof(FileHeader)
+        //  when stepping beyond the FileHeader as they read the database.
+        fwrite( &compatibility_header, sizeof(compatibility_header)-1, 1, ofile );
+        uint8_t ver=DATABASE_VERSION_NUMBER_BIN_DB;
+        fwrite( &ver, 1, 1, ofile );
+    }
     std::set<std::string>::iterator it = set_player.begin();
     FileHeader fh;
     fh.hdr_len     = sizeof(FileHeader);
@@ -1528,7 +1573,7 @@ bool BinDbWriteOutToFile( FILE *ofile, int nbr_to_omit_from_end, ProgressBar *pb
     fh.nbr_events  = std::distance( set_event.begin(),  set_event.end() );
     fh.nbr_sites   = std::distance( set_site.begin(),   set_site.end() );
     fh.nbr_games   = games.size() - nbr_to_omit_from_end;
-    fh.locked = false;
+    fh.locked      = locked;
     cprintf( "%d games, %d players, %d events, %d sites\n", fh.nbr_games, fh.nbr_players, fh.nbr_events, fh.nbr_sites );
     int nbr_bits_player = BitsRequired(fh.nbr_players);
     int nbr_bits_event  = BitsRequired(fh.nbr_events);  
@@ -1650,9 +1695,10 @@ void ReadStrings( FILE *fin, int nbr_strings, std::vector<std::string> &strings 
 }
 
 // Returns bool killed;
-bool BinDbLoadAllGames( bool for_append, std::vector< smart_ptr<ListableGame> > &mega_cache, int &background_load_permill, bool &kill_background_load, ProgressBar *pb )
+bool BinDbLoadAllGames( bool &locked, bool for_append, std::vector< smart_ptr<ListableGame> > &mega_cache, int &background_load_permill, bool &kill_background_load, ProgressBar *pb )
 {
 	bool killed=false;
+    locked = false;
 
     // When loading the system database for searches, reverse order so most recent games come first 
     bool do_reverse = !for_append;
@@ -1673,10 +1719,9 @@ bool BinDbLoadAllGames( bool for_append, std::vector< smart_ptr<ListableGame> > 
     int nbr_bits_site   = BitsRequired(fh.nbr_sites);
     cprintf( "%d player bits, %d event bits, %d site bits\n", nbr_bits_player, nbr_bits_event, nbr_bits_site );
     int hdr_len = fh.hdr_len;   // future compatibility feature - if FileHeader gets longer so will fh.hdr_len
-    bool locked_database = false;
     if( hdr_len >= sizeof(FileHeader) )  // we support VERSION_NUMBER_BIN_DB which predates VERSION_NUMBER_BIN_LOCKABLE
     {                                    //  databases of that version have a smaller header without lockable
-        locked_database = static_cast<bool>(fh.locked);
+        locked = static_cast<bool>(fh.locked);
     }
     if( hdr_len != sizeof(FileHeader) )
     {
@@ -1690,7 +1735,7 @@ bool BinDbLoadAllGames( bool for_append, std::vector< smart_ptr<ListableGame> > 
     ReadStrings( fin, fh.nbr_sites, cb.sites );
     cprintf( "Sites ReadStrings() complete\n" );
 
-	// Use this BinaryBlack if we need to translate
+	// Use this BinaryBlock if we need to translate
 	BinaryBlock bb;
     bb.Next(nbr_bits_event);    // Event
     bb.Next(nbr_bits_site);     // Site
@@ -1773,7 +1818,7 @@ bool BinDbLoadAllGames( bool for_append, std::vector< smart_ptr<ListableGame> > 
 		std::string blob = game_header + game_moves;
         ListableGameBinDb info( cb_idx, game_id, blob );
         make_smart_ptr( ListableGameBinDb, new_info, info );
-        new_info->SetLocked( locked_database );
+        new_info->SetLocked( locked );
         mega_cache.push_back( std::move(new_info) );
         int num = i;
         int den = game_count?game_count:1;

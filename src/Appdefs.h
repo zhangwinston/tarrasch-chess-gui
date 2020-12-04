@@ -10,11 +10,11 @@
 #include "wx/wx.h"
 #include "Portability.h"
 
-#define MASTER_VERSION_BASE "V3.12b*"    //add asterisk prefix between releases
+#define MASTER_VERSION_BASE "V3.13a+"    //add '-' or '+' prefix between releases
 
-//#define USING_KINGBASE
-// no suffix indicates default .tdb is kingbase
-#ifdef  USING_KINGBASE
+#define USING_TARRASCH_BASE
+// no suffix indicates default .tdb is tarrasch-base
+#ifdef  USING_TARRASCH_BASE
 #ifdef THC_WINDOWS
 #define MASTER_VERSION MASTER_VERSION_BASE "-Windows"
 #endif
@@ -38,20 +38,22 @@
 #endif
 #endif
 
-#define DEFAULT_ENGINE "stockfish_8_x32.exe"
-#define DEFAULT_ENGINE_64 "stockfish_8_x64.exe"
+#define DEFAULT_ENGINE "stockfish_11_x32.exe"
+#define DEFAULT_ENGINE_64 "stockfish_11_x64.exe"
+#define DEFAULTS_STEPPER_LEVEL 2
 #define DATABASE_VERSION_NUMBER_LEGACY   1    // Old SQL type = supported with V3.03a
 #define DATABASE_VERSION_NUMBER_TINY     2    // Some kind of intermediate version, we don't support it any more at all
 #define DATABASE_VERSION_NUMBER_BIN_DB   3    // Up until V3.12b
-#define DATABASE_VERSION_NUMBER_LOCKABLE 4    // V3.12b** onward, supports lockable databases (retain support for previous version too) 
-#ifdef  USING_KINGBASE
-#define DEFAULT_DATABASE "kingbase-lite.tdb"
+#define DATABASE_VERSION_NUMBER_LOCKABLE 4    // V3.12b** onward, supports lockable databases (retain support for previous version too)
+#define DATABASE_LOCKABLE_LIMIT 10000         // Max number of restricted games we can write
+#ifdef  USING_TARRASCH_BASE
+#define DEFAULT_DATABASE "tarrasch-base.tdb"
 #else
 #define DEFAULT_DATABASE "great-players-demo.tdb"
 #endif
 
 // Conditional compiles
-#define DURING_DEVELOPMENT		    // If defined we get a console window for cprintf()
+//#define DURING_DEVELOPMENT		    // If defined we get a console window for cprintf()
 #define AUI_NOTEBOOK				// Define this to get X close boxes on tabs
 //#define NEW_TAB_LAUNCHES_TESTBED	// If defined new tab feature actually launches testbed window instead
 #ifndef DURING_DEVELOPMENT

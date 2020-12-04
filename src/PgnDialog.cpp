@@ -46,10 +46,10 @@ wxSizer *PgnDialog::GdvAddExtraControls( bool WXUNUSED(big_display) )
         //vsiz_panel_buttons->Add(edit_game_prefix, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
 
         // Paste game / Board->Game
-        wxButton* tournament_games = new wxButton ( this, ID_TOURNAMENT_GAMES, wxT("New Pairings"), // TEMP TEMP wxT("Paste current game"),
+        wxButton* board_to_game = new wxButton ( this, ID_BOARD2GAME, wxT("Paste current game"),
             wxDefaultPosition, wxDefaultSize, 0 );
-        gdr.RegisterPanelWindow( tournament_games );
-        vsiz_panel_buttons->Add(tournament_games, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
+        gdr.RegisterPanelWindow( board_to_game );
+        vsiz_panel_buttons->Add(board_to_game, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
 
         // Delete
         wxButton* delete_ = new wxButton ( this, wxID_DELETE, wxT("Delete"),
@@ -92,6 +92,15 @@ wxSizer *PgnDialog::GdvAddExtraControls( bool WXUNUSED(big_display) )
             wxDefaultPosition, wxDefaultSize, 0 );
         gdr.RegisterPanelWindow( eco_codes );
         vsiz_panel_buttons->Add(eco_codes, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
+
+        // New pairings
+        wxButton* tournament_games = new wxButton ( this, ID_TOURNAMENT_GAMES, wxT("New Pairings"),
+            wxDefaultPosition, wxDefaultSize, 0 );
+        gdr.RegisterPanelWindow( tournament_games );
+        vsiz_panel_buttons->Add(tournament_games, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
+
+        // Spacer
+        vsiz_panel_buttons->Add(5, 5, 0, wxALIGN_CENTER_HORIZONTAL|wxALL, 5);
     }
     else if( id == ID_PGN_DIALOG_CLIPBOARD )
     {
@@ -130,6 +139,36 @@ wxSizer *PgnDialog::GdvAddExtraControls( bool WXUNUSED(big_display) )
         
     }
     return vsiz_panel_buttons;
+}
+
+void PgnDialog::GdvEnableControlsIfGamesFound( bool have_games )
+{
+    FindWindow(wxID_OK)->Enable(have_games);                            // Load Game
+    if( id==ID_PGN_DIALOG_FILE || id==ID_PGN_DIALOG_CURRENT_FILE )
+    {
+        // Don't selectively disable the save buttons, we want to be able to save zero length PGN files
+        //FindWindow(wxID_SAVE)->Enable(have_games);                      // Save
+        //FindWindow(ID_SAVE_ALL_TO_A_FILE)->Enable(have_games);          // Save all
+        FindWindow(ID_PGN_DIALOG_GAME_DETAILS)->Enable(have_games);     // Edit Game Details
+        FindWindow(wxID_COPY)->Enable(have_games);                      // Copy
+        FindWindow(wxID_CUT)->Enable(have_games);                       // Cut
+        FindWindow(wxID_DELETE)->Enable(have_games);                    // Delete
+        FindWindow(ID_ADD_TO_CLIPBOARD)->Enable(have_games);            // Add to clipboard
+        //FindWindow(ID_PGN_DIALOG_PUBLISH)->Enable(have_games);          // Publish
+        FindWindow(ID_DIALOG_ECO)->Enable(have_games);                  // ECO codes
+    }
+    else if( id == ID_PGN_DIALOG_CLIPBOARD )
+    {
+        FindWindow(ID_PGN_DIALOG_GAME_DETAILS)->Enable(have_games);     // Edit Game Details
+        FindWindow(wxID_DELETE)->Enable(have_games);                    // Delete
+        //FindWindow(ID_SAVE_ALL_TO_A_FILE)->Enable(have_games);          // Save all
+    }
+    else if( id == ID_PGN_DIALOG_SESSION )
+    {
+        FindWindow(ID_ADD_TO_CLIPBOARD)->Enable(have_games);            // Add to clipboard
+        FindWindow(wxID_COPY)->Enable(have_games);                      // Copy
+        //FindWindow(ID_SAVE_ALL_TO_A_FILE)->Enable(have_games);          // Save all
+    }
 }
 
 
