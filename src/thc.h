@@ -21,6 +21,7 @@
  */
 
 #include <stddef.h>
+#include <string.h>
 #include <string>
 #include <vector>
 /****************************************************************************
@@ -334,7 +335,7 @@ public:
     void Init()
     {
         white = true;
-        strcpy_s( squares, sizeof(squares),
+        strcpy( squares,
            "rnbqkbnr"
            "pppppppp"
            "        "
