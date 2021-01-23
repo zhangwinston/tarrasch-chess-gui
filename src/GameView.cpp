@@ -623,7 +623,7 @@ void GameView::ToString( std::string &str, int begin, int end )
             if( !splitting )
             {
                 idx = frag.find(' ');
-                if( 0<=idx && idx<78 )
+                if( 0< idx && idx<78 )  //zhangyouwen, add for no space comment,such as chinese sentenses
                 {
                     splitting = true;
                     str += "\n";

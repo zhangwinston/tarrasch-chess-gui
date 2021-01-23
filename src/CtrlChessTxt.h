@@ -33,6 +33,9 @@ public:
     void Cut();
     void Delete();
 	void SetFontSize();
+#ifdef __WXMSW__
+	virtual WXLRESULT MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lParam) wxOVERRIDE;
+#endif // __WXMSW__
 
 private:
 	void OnProcessCustom(wxCommandEvent& event);
@@ -80,8 +83,7 @@ private:
     void OnAnnot18(wxCommandEvent& event);
     void OnAnnot19(wxCommandEvent& event);
     void OnAnnot20(wxCommandEvent& event);
-
-    int max_w, max_h, height;
+	int max_w, max_h, height;
 private:
     wxFont font;
     wxMenu *context_menu;

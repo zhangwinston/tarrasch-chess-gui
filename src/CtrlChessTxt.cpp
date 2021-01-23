@@ -1017,6 +1017,35 @@ void CtrlChessTxt::OnAnnot20(wxCommandEvent& WXUNUSED(event))
     OnAnnotNag2(0);
 }
 
+//zhangyouwen for IME compositionwindow follow the position of caret
+#ifdef __WXMSW__
+WXLRESULT CtrlChessTxt::MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lParam)
+{
+	if (nMsg == WM_IME_STARTCOMPOSITION)
+	{
+		//HWND hwnd = this->GetParent()->GetHWND();
+		HWND hwnd = this->GetHWND();
+		if (hwnd != NULL)
+		{
+			POINT pt;
+			GetCaretPos(&pt);
+			HIMC hIMC = ImmGetContext(hwnd);
+			if (hIMC != NULL)
+			{
+				COMPOSITIONFORM cf;
+				cf.dwStyle = CFS_POINT;
+				cf.ptCurrentPos.x = pt.x;
+				cf.ptCurrentPos.y = pt.y;
+				ImmSetCompositionWindow(hIMC, &cf);
+				ImmReleaseContext(hwnd, hIMC);
+			}
+		}
+		return ::DefWindowProc(hwnd, nMsg, wParam, lParam);
+	}
+	return wxRichTextCtrl::MSWWindowProc(nMsg, wParam, lParam);
+}
+#endif
+//zhangyouwen for IME compositionwindow follow the position of caret
 
 BEGIN_EVENT_TABLE(CtrlChessTxt, wxRichTextCtrl)
 //    EVT_PAINT(CtrlChessTxt::OnPaint)
