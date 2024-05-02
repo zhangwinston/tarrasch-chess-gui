@@ -1875,9 +1875,9 @@ void ChessBoardBitmap::PutEx( char piece,
             for( j=0; j < width_bytes/(8*density); j++ )
             {
                 if( *mask++ != '0' )
-                    memcpy( dst, src, density );
-                src += density;
-                dst += density;
+                    memcpy( dst, src, (byte)density );
+                src +=(byte) density;
+                dst +=(byte) density;
             }
         }
     }

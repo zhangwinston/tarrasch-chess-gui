@@ -339,7 +339,7 @@ void CtrlChessTxt::Paste()
             wxTextDataObject data;
             wxTheClipboard->GetData( data );
             wxString txt_to_paste = data.GetText();
-            std::string txt_to_insert;
+			wxString txt_to_insert;
             bool check_tag = gd->IsEmpty();
             for( unsigned int i=0; i<txt_to_paste.Length(); i++ )
             {
@@ -361,7 +361,7 @@ void CtrlChessTxt::Paste()
                 if( c > 0x80 )      //   so for now we'll just show a '?' which is what we intended in Linux for now
                     c = '?';
 #else
-                char c=txt_to_paste[i];
+				wxChar c=txt_to_paste[i];
 #endif
                 /* Did some debugging to sort out an issue with en dash. Some old code
                    in GameDocument.cpp did special handling to treat en dash as ascii
@@ -503,8 +503,11 @@ void CtrlChessTxt::OnChar(wxKeyEvent& event)
         if( event.GetModifiers() & wxMOD_SHIFT )
             shift = true;
         long keycode = event.GetKeyCode();
+#if wxUSE_UNICODE
+		keycode = event.GetUnicodeKey();
+#endif
         //cprintf( "OnChar() keycode=%lu\n", keycode );
-        char ascii = '\0';
+        wxChar ascii = '\0';
         bool pass_thru_edit = false;   // an optimisation - sometimes we can just let the richtext edit control process the character
         {
             switch ( keycode )
@@ -742,8 +745,9 @@ void CtrlChessTxt::OnChar(wxKeyEvent& event)
                 }
                 default:
                 {
-                    bool iso8859_extended_charset = (0xa0<=keycode && keycode<=0xff);
-                    if (iso8859_extended_charset || wxIsprint((int)keycode))
+					//bool iso8859_extended_charset = (0xa0<=keycode && keycode<=0xff);
+                    //if (iso8859_extended_charset || wxIsprint((int)keycode))
+					if(wxIsprint((int)keycode))
                     {
                         if( is_selection_in_comment )
                         {
@@ -1026,6 +1030,34 @@ void CtrlChessTxt::OnAnnot20(wxCommandEvent& WXUNUSED(event))
     OnAnnotNag2(0);
 }
 
+//zhangyouwen for IME compositionwindow follow the position of caret
+#ifdef __WXMSW__
+WXLRESULT CtrlChessTxt::MSWWindowProc(WXUINT nMsg, WXWPARAM wParam, WXLPARAM lParam)
+{
+	if (nMsg == WM_IME_STARTCOMPOSITION)
+	{
+		HWND hwnd = this->GetHWND();
+		if (hwnd != NULL)
+		{
+			POINT pt;
+			GetCaretPos(&pt);
+			HIMC hIMC = ImmGetContext(hwnd);
+			if (hIMC != NULL)
+			{
+				COMPOSITIONFORM cf;
+				cf.dwStyle = CFS_POINT;
+				cf.ptCurrentPos.x = pt.x;
+				cf.ptCurrentPos.y = pt.y;
+				ImmSetCompositionWindow(hIMC, &cf);
+				ImmReleaseContext(hwnd, hIMC);
+			}
+		}
+		return ::DefWindowProc(hwnd, nMsg, wParam, lParam);
+	}
+	return wxRichTextCtrl::MSWWindowProc(nMsg, wParam, lParam);
+}
+#endif
+//zhangyouwen for IME compositionwindow follow the position of caret
 
 BEGIN_EVENT_TABLE(CtrlChessTxt, wxRichTextCtrl)
 //    EVT_PAINT(CtrlChessTxt::OnPaint)

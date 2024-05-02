@@ -2600,7 +2600,7 @@ void GameLogic::OnIdle()
             if( add_comment )
             {
                 cprintf( "Adding comment\n");
-                std::string s;
+                wxString s;
                 int len = rand()%20 + 10;
                 for( int i=0; i<len; i++ )
                 {

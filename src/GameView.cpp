@@ -636,7 +636,7 @@ void GameView::ToString( std::string &str, int begin, int end )
             if( !splitting )
             {
                 idx = frag.find(' ');
-                if( 0<=idx && idx<78 )
+                if( 0< idx && idx<78 )  //zhangyouwen, add for no space comment,such as chinese sentenses
                 {
                     splitting = true;
                     str += "\n";
@@ -1724,9 +1724,8 @@ void GameView::Debug()
         }
         for( int j=0; j<gve.level; j++ )
             cprintf(" ");
-        cprintf( "(%d) %s offset1=%d, offset2=%d, str=%s",
+		cprintf( "%s level=%d, offset1=%d, offset2=%d, str=%s\n", s,
             gve.level,
-            s,
             gve.offset1,
             gve.offset2,
             gve.str.c_str() );
@@ -1838,7 +1837,7 @@ bool GameView::GetOffsetWithinComment( unsigned long pos, unsigned long &pos_wit
     return found;
 }
 
-bool GameView::CommentEdit( wxRichTextCtrl *UNUSED(ctrl), std::string &txt_to_insert, long keycode, bool *pass_thru_edit_ptr )
+bool GameView::CommentEdit(wxRichTextCtrl *UNUSED(ctrl), wxString &txt_to_insert, long keycode, bool *pass_thru_edit_ptr)
 {
     bool pass_thru_edit = false;
     bool used = false;
@@ -1846,9 +1845,10 @@ bool GameView::CommentEdit( wxRichTextCtrl *UNUSED(ctrl), std::string &txt_to_in
     unsigned long pos = gl->atom.GetInsertionPoint();
     unsigned long orig_pos = pos;
     int nbr = expansion.size();
-    if( 0x20<=keycode && keycode<=0xff && keycode!=0x7f /*delete*/ )
+	//if (0x20 <= keycode && keycode <= 0xff && keycode != 0x7f /*delete*/)
+    wxChar c = (wxChar)keycode;
+    if (wxIsprint(c) && keycode != 0x7f /*delete*/)
     {
-        char c = (char)keycode;
         txt_to_insert = c;
         ascii = true;
     }
